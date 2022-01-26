@@ -589,7 +589,9 @@ CyclicBarrier 有两个构造函数，其中 parties 指示计数器的初始值
 ## Semaphore
 Semaphore 类似于操作系统中的信号量，可以控制对互斥资源的访问线程数。
 
+
 以下代码模拟了对某个服务的并发请求，每次只能有 3 个客户端同时访问，请求总数为 10。
+<img width="654" alt="截屏2022-01-26 下午5 32 37" src="https://user-images.githubusercontent.com/98211272/151138320-baa39811-a8d6-4cbc-885c-9b45abb8e612.png">
 
 # 多线程开发良好的实践
 给线程起个有意义的名字，这样可以方便找 Bug。
