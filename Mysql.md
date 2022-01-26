@@ -52,7 +52,7 @@ binlog 的主要使用场景有两个，分别是 主从复制 和 数据恢复 
 
 数据恢复 ：通过使用 mysqlbinlog 工具来恢复数据。
 
-binlog刷盘时机对于 InnoDB 存储引擎而言，只有在事务提交时才会记录biglog ，此时记录还在内存中，那么 biglog是什么时候刷到磁盘中的呢？
+binlog刷盘时机对于 InnoDB 存储引擎而言，只有在事务提交时才会记录bin log ，此时记录还在内存中，那么 bin log是什么时候刷到磁盘中的呢？
 
 mysql 通过 sync_binlog 参数控制 biglog 的刷盘时机，取值范围是 0-N：
 
