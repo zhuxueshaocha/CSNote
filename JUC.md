@@ -414,3 +414,197 @@ MESI协议是当前最主流的缓存一致性协议，在MESI协议中，每个
 
 
 这里的I、S和M状态已经有了对应的概念：失效/未载入、干净以及脏的缓存段。所以这里新的知识点只有E状态，代表独占式访问，这个状态解决了"在我们开始修改某块内存之前，我们需要告诉其它处理器"这一问题：只有当缓存行处于E或者M状态时，处理器才能去写它，也就是说只有在这两种状态下，处理器是独占这个缓存行的。当处理器想写某个缓存行时，如果它没有独占权，它必须先发送一条"我要独占权"的请求给总线，这会通知其它处理器把它们拥有的同一缓存段的拷贝失效（如果有）。只有在获得独占权后，处理器才能开始修改数据----并且此时这个处理器知道，这个缓存行只有一份拷贝，在我自己的缓存里，所以不会有任何冲突。反之，如果有其它处理器想读取这个缓存行（马上能知道，因为一直在嗅探总线），独占或已修改的缓存行必须先回到"共享"状态。如果是已修改的缓存行，那么还要先把内容回写到内存中。
+
+# synchronized和ReentrantLock
+
+1. 两者都是可重入锁
+
+“可重入锁”概念是：自己可以再次获取自己的内部锁。比如一个线程获得了某个对象 的锁，此时这个对象锁还没有释放，当其再次想要获取这个对象的锁的时候还是可以获取的，如果不可锁重入的话，就会造成死锁。同一个线程每次获取锁，锁的计数器都自增1，所以要等到锁的计数器下降为0 时才能释放锁。 
+
+2. synchronized 依赖于 JVM 而 ReentrantLock 依赖于 API。
+ synchronized 是依赖于 JVM 实现的，前面我们也讲到了 虚拟机团队在 JDK1.6 为 synchronized 关键字进行了很多优化，但是这些优化都是在虚拟机层面实现的，并没有直接暴露给我们。 ReentrantLock 是 JDK 层面实现的（也就是 API 层面，需要 lock() 和 unlock() 方法配合 try/finally 语句块来完成。
+
+3. ReentrantLock 比 synchronized 增加了了一些高级功能。
+
+主要来说主要有三点：
+1）等待可中断；
+
+2）可实现公平锁；
+
+3）可实现选择性通知 
+
+ReentrantLock提供了一种能够中断等待锁的的线程的的机制，通过lock.lockInterruptibly()来实现这个机制。也就是说正在等待的线程可以选择放弃等待，改为处理其他事情。ReentrantLock可以指定是是公平锁还是非公平锁。而synchronized只能是是非公平锁。。所谓的公平锁就是先等待的线程先获得锁。 ReentrantLock默认情况是非公平的，可以通过 ReentrantLock类的 ReentrantLock(boolean fair) 构造方法来制定是否是公平的。 
+
+synchronized关键字与wait()和notify()/notifyAll()方法相结合可以实现等待/通知机制，ReentrantLock类当然也可以实现，但是需要借助于Condition接口与newCondition() 方法。Condition是JDK1.5之后才有的，它具有很好的灵活性，比如可以实现多路通知功能也就是在一个Lock对象中可以创建多个Condition实例（即对象监视器），线程对象可以注册在指定的Condition中，从而可以有有选择性的进行线程通知，在调度线程上更加灵活。在使用notify()/notifyAll()方法进行通知时，被通知的线程是由 JVM 选择的，用ReentrantLock类结合 Condition实例可以实现“选择性通知” ，这个功能非常重要，而且是Condition接口默认提供的。而 synchronized关键字就相当于整个Lock对象中只有一个Condition实例，所有的线程都注册在它一个身上。如果 执行notifyAll()方法的话就会通知所有处于等待状态的线程这样会造成很大的效率问题，而Condition实例的 signalAll()方法 只会唤醒注册在该Condition实例中的所有等待线程。 如果你想使用上述功能，那么选择ReentrantLock是一个不错的选择。 
+
+# 线程安全
+多个线程不管以何种方式访问某个类，并且在主调代码中不需要进行同步，都能表现正确的行为。
+
+线程安全有以下几种实现方式：
+
+## 不可变
+不可变（Immutable）的对象一定是线程安全的，不需要再采取任何的线程安全保障措施。只要一个不可变的对象被正确地构建出来，永远也不会看到它在多个线程之中处于不一致的状态。多线程环境下，应当尽量使对象成为不可变，来满足线程安全。
+
+不可变的类型：
+
+1. final 关键字修饰的基本数据类型
+
+2. String
+
+3. 枚举类型
+
+## 互斥同步
+synchronized 和 ReentrantLock。
+
+## 非阻塞同步
+
+互斥同步最主要的问题就是线程阻塞和唤醒所带来的性能问题，因此这种同步也称为阻塞同步。
+
+互斥同步属于一种悲观的并发策略，总是认为只要不去做正确的同步措施，那就肯定会出现问题。无论共享数据是否真的会出现竞争，它都要进行加锁（这里讨论的是概念模型，实际上虚拟机会优化掉很大一部分不必要的加锁）、用户态核心态转换、维护锁计数器和检查是否有被阻塞的线程需要唤醒等操作。
+
+随着硬件指令集的发展，我们可以使用基于冲突检测的乐观并发策略：先进行操作，如果没有其它线程争用共享数据，那操作就成功了，否则采取补偿措施（不断地重试，直到成功为止）。这种乐观的并发策略的许多实现都不需要将线程阻塞，因此这种同步操作称为非阻塞同步。
+
+### CAS
+乐观锁需要操作和冲突检测这两个步骤具备原子性，这里就不能再使用互斥同步来保证了，只能靠硬件来完成。硬件支持的原子性操作最典型的是：比较并交换（Compare-and-Swap，CAS）。CAS 指令需要有 3 个操作数，分别是内存地址 V、旧的预期值 A 和新值 B。当执行操作时，只有当 V 的值等于 A，才将 V 的值更新为 B。
+
+compareAndSwap 中文叫做比较并交换，一种无锁原子算法
+它包含 3 个参数 CAS（V，E，N），V表示要更新变量的值，E表示预期值，N表示新值。
+仅当 V值等于E值时，才会将V的值设为N，如果V值和E值不同，则说明已经有其他线程做了更新，则当前线程则什么都不做。
+最后，CAS 返回当前V的真实值。CAS 操作时抱着乐观的态度进行的，它总是认为自己可以成功完成操作。 它是一种乐观锁
+
+<img width="718" alt="截屏2022-01-26 下午5 19 52" src="https://user-images.githubusercontent.com/98211272/151136209-0d99d792-a15a-4428-911c-c6ab261480e1.png">
+
+应用： java中的Atomic系列就是使用CAS实现的
+
+<img width="704" alt="截屏2022-01-26 下午5 20 19" src="https://user-images.githubusercontent.com/98211272/151136273-4ebc2a54-2de9-4811-ac29-f86d7cda6289.png">
+
+
+
+cmpxchg(void* ptr, int old, int new)，如果ptr和old的值一样，则把new写到ptr内存，否则返回ptr的值，整个操作是原子的。
+
+<img width="730" alt="截屏2022-01-26 下午5 20 27" src="https://user-images.githubusercontent.com/98211272/151136302-b79e736e-6b19-456d-9246-ad424b012971.png">
+
+### AtomicInteger
+Java.Util.Concurrent包里面的整数原子类 AtomicInteger 的方法调用了 Unsafe 类的 CAS 操作。
+
+#### CAS带来的ABA问题
+
+如果一个变量初次读取的时候是 A 值，它的值被改成了 B，后来又被改回为 A，那 CAS 操作就会误认为它从来没有被改变过。
+
+Java.Util.Concurrent包提供了一个带有标记的原子引用类 AtomicStampedReference 来解决这个问题，它可以通过控制变量值的版本来保证 CAS 的正确性。大部分情况下 ABA 问题不会影响程序并发的正确性，如果需要解决 ABA 问题，改用传统的互斥同步可能会比原子类更高效。
+
+
+## 无同步方案
+要保证线程安全，并不是一定就要进行同步。如果一个方法本来就不涉及共享数据，那它自然就无须任何同步措施去保证正确性。
+
+1. 栈封闭
+
+多个线程访问同一个方法的局部变量时，不会出现线程安全问题，因为局部变量存储在虚拟机栈中，属于线程私有的。
+
+2. 线程本地存储（Thread Local Storage）
+
+作用：
+
+ThreadLocal的作用主要是做数据隔离，填充的数据只属于当前线程，变量的数据对别的线程而言是相对隔离的，在多线程环境下，如何防止自己的变量被其它线程篡改。 
+
+原理：
+
+每个Thread维护着一个ThreadLocalMap的引用ThreadLocalMap是ThreadLocal的内部类，用Entry来进行存储调用ThreadLocal的set()方法时，实际上就是往ThreadLocalMap设置值，key是ThreadLocal对象，值是传递进来的对象调用ThreadLocal的get()方法时，实际上就是往ThreadLocalMap获取值，key是ThreadLocal对象ThreadLocal本身并不存储值，它只是作为一个key来让线程从ThreadLocalMap获取value。正因为这个原理，所以ThreadLocal能够实现“数据隔离”，获取当前线程的局部变量值，不受其他线程影响～key为使用弱引用的ThreadLocal实例，value为线程变量的副本。
+
+
+### 内存泄露
+
+内存泄露为程序在申请内存后，无法释放已申请的内存空间，一次内存泄露危害可以忽略，但内存泄露堆积后果很严重，无论多少内存,迟早会被占光，广义并通俗的说，就是：不再会被使用的对象或者变量占用的内存不能被回收，就是内存泄露。
+Thread Local引用原理图
+
+
+<img width="668" alt="截屏2022-01-26 下午5 15 13" src="https://user-images.githubusercontent.com/98211272/151135520-2222d8d7-c250-489a-a300-dc45fb4d8de4.png">
+
+
+#### 那为什么使用弱引用而不是强引用？？
+
+##### 如果key 使用强引用
+
+当ThreadLocalMap的key为强引用回收ThreadLocal时，因为ThreadLocalMap还持有ThreadLocal的强引用，如果没有手动删除，ThreadLocal不会被回收，导致Entry内存泄漏。
+
+##### 如果key 使用弱引用
+
+当ThreadLocalMap的key为弱引用回收ThreadLocal时，由于ThreadLocalMap持有ThreadLocal的弱引用，即使没有手动删除，ThreadLocal也会被回收。当key为null，在下一次ThreadLocalMap调用set(),get()，remove()方法的时候会被清除value值。由于Thread中包含变量ThreadLocalMap，因此ThreadLocalMap与Thread的生命周期是一样长，如果都没有手动删除对应key，都会导致内存泄漏。
+但是使用弱引用可以多一层保障：弱引用ThreadLocal不会内存泄漏，对应的value在下一次ThreadLocalMap调用set(),get(),remove()的时候会被清除。因此，ThreadLocal内存泄漏的根源是：由于ThreadLocalMap的生命周期跟Thread一样长，如果没有手动删除对应key就会导致内存泄漏，而不是因为弱引用。
+
+# AQS
+
+## 概念
+
+AQS的全称为（AbstractQueuedSynchronizer）。AQS是一个用来构建锁和同步器的框架，使用AQS能简单且高效地构造出应用广泛的大量的同步器，比如 我们提到的ReentrantLock，Semaphore其他的诸如 ReentrantReadWriteLock，SynchronousQueue，FutureTask等等皆是基于AQS的。当然，我们自己也能利用AQS非常轻松容易地构造出符合我们自己需求的同步器。
+
+## 核心思想
+如果被请求的共享资源空闲，则将当前请求资源的线程设置为有效的工作线程，并且将共享资源设置为锁定状态。如果被请求的共享资源被占用，那么就需要一套线程阻塞等待以及被唤醒时锁分配的机制，这个机制AQS是用CLH队列锁实现的，即将暂时获取不到锁的线程加入到队列中。 
+
+CLH(Craig,Landin,and Hagersten)队列是一个虚拟的双向队列（虚拟的双向队列即不存在队列实例，仅存在结点之间的关联关系）。AQS是将每条请求共享资源的线程封装成一个CLH锁队列的一个 结点（Node）来实现锁的分配。
+
+AQS(AbstractQueuedSynchronizer)原理图：
+
+
+
+AQS使用一个int成员变量来表示同步状态，通过内置的FIFO队列来完成获取资源线程的排队工作。AQS 使用CAS对该同步状态进行原子操作实现对其值的修改。
+
+
+## 对资源的共享方式 
+
+AQS定义两种资源共享方式：独占和共享
+### Exclusive（独占）
+只有一个线程能执行，如ReentrantLock。又可分为公平锁和非公平锁： 
+
+公平锁：按照线程在队列中的排队顺序，先到者先拿到锁 
+
+非公平锁：当线程要获取锁时，无视队列顺序直接去抢锁，谁抢到就是谁的 
+### Share（共享）
+
+多个线程可同时执行，
+
+如Semaphore、 CountDownLatch、 CyclicBarrier、ReadWriteLock 我们都会在后面讲到。 ReentrantReadWriteLock 可以看成是组合式，因为ReentrantReadWriteLock也就是读写锁允许多个线程同时对某一资源进行读。 不同的自定义同步器争用共享资源的方式也不同。自定义同步器在实现时只需要实现共享资源 state的获取与释放方式即可，至于具体线程等待队列的维护（如获取资源失败入队/唤醒出队等），AQS已经在顶层实现好了。
+
+## CountDownLatch
+用来控制一个或者多个线程等待多个线程。
+
+维护了一个计数器 cnt，每次调用 countDown() 方法会让计数器的值减 1，减到 0 的时候，那些因为调用 await() 方法而在等待的线程就会被唤醒。
+
+
+
+<img width="368" alt="截屏2022-01-26 下午5 25 32" src="https://user-images.githubusercontent.com/98211272/151137249-71942a0e-12b4-4a06-8163-d6a109c55772.png">
+
+
+<img width="682" alt="截屏2022-01-26 下午5 25 43" src="https://user-images.githubusercontent.com/98211272/151137250-0c9d210f-5379-41c8-be0e-70565c603df1.png">
+
+## CyclicBarrier
+用来控制多个线程互相等待，只有当多个线程都到达时，这些线程才会继续执行。
+
+和 CountdownLatch 相似，都是通过维护计数器来实现的。线程执行 await() 方法之后计数器会减 1，并进行等待，直到计数器为 0，所有调用 await() 方法而在等待的线程才能继续执行。
+
+CyclicBarrier 和 CountdownLatch 的一个区别是，CyclicBarrier 的计数器通过调用 reset() 方法可以循环使用，所以它才叫做循环屏障。
+
+CyclicBarrier 有两个构造函数，其中 parties 指示计数器的初始值，barrierAction 在所有线程都到达屏障的时候会执行一次。
+
+## Semaphore
+Semaphore 类似于操作系统中的信号量，可以控制对互斥资源的访问线程数。
+
+以下代码模拟了对某个服务的并发请求，每次只能有 3 个客户端同时访问，请求总数为 10。
+
+# 多线程开发良好的实践
+给线程起个有意义的名字，这样可以方便找 Bug。
+
+缩小同步范围，从而减少锁争用。例如对于 synchronized，应该尽量使用同步块而不是同步方法。
+
+多用同步工具少用 wait() 和 notify()。首先，CountDownLatch, CyclicBarrier, Semaphore 和 Exchanger 这些同步类简化了编码操作，而用 wait() 和 notify() 很难实现复杂控制流；其次，这些同步类是由最好的企业编写和维护，在后续的 JDK 中还会不断优化和完善。
+
+使用 BlockingQueue 实现生产者消费者问题。
+
+多用并发集合少用同步集合，例如应该使用 ConcurrentHashMap 而不是 Hashtable。
+
+使用本地变量和不可变类来保证线程安全。
+
+使用线程池而不是直接创建线程，这是因为创建线程代价很高，线程池可以有效地利用有限的线程来启动任务。
+
+
+
