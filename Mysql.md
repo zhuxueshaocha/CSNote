@@ -33,6 +33,7 @@ InnoDB 支持事务，并发情况下有很好的性能，基本可以替代MyIS
 <img width="513" alt="截屏2022-01-24 下午6 16 39" src="https://user-images.githubusercontent.com/98211272/150764380-28342de2-596f-43bc-a0ed-048ae05fcf88.png">
 
 mysql8.0版本之后需要了查询缓存的功能，因为数据失效太过频繁。
+<img width="752" alt="截屏2022-02-07 下午10 17 14" src="https://user-images.githubusercontent.com/98211272/152805063-7fe5ff6d-6f47-4a41-8bab-0aa3db7c2607.png">
 
 ## mysql的日志系统
 
