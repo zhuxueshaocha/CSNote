@@ -556,5 +556,52 @@ G1 把堆划分成多个大小相等的独立区域（Region），新生代和�
 一般情况下，JVM的对象都放在堆内存中（发生逃逸分析除外）。当类加载检查通过后，Java虚拟机开始为新生对象分配内存。如果Java堆中内存是绝对规整的，所有被使用过的的内存都被放到一边，空闲的内存放到另外一边，中间放着一个指针作为分界点的指示器，所分配内存仅仅是把那个指针向空闲空间方向挪动一段与对象大小相等的实例，这种分配方式就是指针碰撞。
 
 如果Java堆内存中的内存并不是规整的，已被使用的内存和空闲的内存相互交错在一起，不可以进行指针碰撞啦，虚拟机必须维护一个列表，记录哪些内存是可用的，在分配的时候从列表找到一块大的空间分配给对象实例，并更新列表上的记录，这种分配方式就是空闲列表。
+ 
+ ## JVM调优参数
+ 
+「堆栈内存相关」
+ 
+
+ -Xms 设置初始堆的大小
+
+ -Xmx 设置最大堆的大小
+
+ -Xmn 设置年轻代大小
+
+ -Xss 每个线程的堆栈大小
+
+ -XX:NewSize 设置年轻代大小(for 1.3/1.4)
+
+ -XX:MaxNewSize 年轻代最大值(for 1.3/1.4)
+
+ -XX:NewRatio 年轻代与年老代的比值(除去持久代)
+
+ -XX:SurvivorRatio Eden区与Survivor区的的比值
+
+ -XX:PretenureSizeThreshold 当创建的对象超过指定大小时，直接把对象分配在老年代。
+
+ -XX:MaxTenuringThreshold设定对象在Survivor复制的最大年龄阈值，超过阈值转移到老年代
+
+ 「垃圾收集器相关」
+
+ -XX:+UseParallelGC：选择垃圾收集器为并行收集器。
+
+ -XX:ParallelGCThreads=20：配置并行收集器的线程数
+
+ -XX:+UseConcMarkSweepGC：设置年老代为并发收集。
+
+ -XX:CMSFullGCsBeforeCompaction=5 由于并发收集器不对内存空间进行压缩、整理，所以运行一段时间以后会产生“碎片”，使得运行效率降低。此值设置运行5次GC以后对内存空间进行压缩、整理。
+
+ -XX:+UseCMSCompactAtFullCollection：打开对年老代的压缩。可能会影响性能，但是可以消除碎片
+
+ 「辅助信息相关」
+
+ -XX:+PrintGCDetails 打印GC详细信息
+
+ -XX:+HeapDumpOnOutOfMemoryError让JVM在发生内存溢出的时候自动生成内存快照,排查问题用
+
+ -XX:+DisableExplicitGC禁止系统System.gc()，防止手动误触发FGC造成问题.
+
+ -XX:+PrintTLAB 查看TLAB空间的使用情况
 
 
