@@ -25,14 +25,31 @@ Java 里面线程池的顶级接口是 Executor，但是严格意义上讲 Execu
 ## newCachedThreadPool
 创建一个可缓存线程池，如果线程池长度超过处理需要，可灵活回收空闲线程，若无可回收，则新建线程。
 
+底层分析：corePoolSize为0；maximumPoolSize为Integer.MAX_VALUE；keepAliveTime为60L；unit为TimeUnit.SECONDS；workQueue为SynchronousQueue(同步队列)
+
+使用场景：执行很多短期异步的小程序或者负载较轻的服务器
+
 ##  newFixedThreadPool
-创建一个定长线程池，可控制线程最大并发数，超出的线程会在队列中等待。
+创建一个定长线程池，可控制线程最大并发数，超出的线程会在队列中等待
+
+底层分析：返回ThreadPoolExecutor实例，接收参数为所设定线程数量nThread，corePoolSize为nThread，maximumPoolSize为nThread；keepAliveTime为0L(不限时)；unit为：TimeUnit.MILLISECONDS；WorkQueue为：new LinkedBlockingQueue<Runnable>() 无界阻塞队列
+
+使用场景：执行长期的任务，性能好很多
 
 ## newScheduledThreadPool
-创建一个定长线程池，支持定时及周期性任务执行。
+创建一个定长线程池，支持定时和周期性任务执行
+
+底层分析：创建ScheduledThreadPoolExecutor实例，corePoolSize为传递来的参数，maximumPoolSize为Integer.MAX_VALUE；keepAliveTime为0；unit为：TimeUnit.NANOSECONDS；workQueue为：new DelayedWorkQueue() 一个按超时时间升序排序的队列
+
+使用场景：周期性执行任务的场景
 
 ## newSingleThreadExecutor
-创建一个单线程化的线程池，它只会用唯一的工作线程来执行任务，保证所有任务按照指定顺序(FIFO, LIFO, 优先级)执行。
+
+创建一个单线程化的线程池，它只会用唯一的工作线程来执行任务，保证所有任务按照指定顺序（FIFO，LIFO，优先级）执行
+
+底层分析：FinalizableDelegatedExecutorService包装的ThreadPoolExecutor实例，corePoolSize为1；maximumPoolSize为1；keepAliveTime为0L；unit为：TimeUnit.MILLISECONDS；workQueue为：new LinkedBlockingQueue<Runnable>() 无界阻塞队列
+
+使用场景：一个任务一个任务执行的场景
 
 
 # 线程状态
