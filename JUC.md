@@ -609,4 +609,199 @@ Semaphore 类似于操作系统中的信号量，可以控制对互斥资源的�
 使用线程池而不是直接创建线程，这是因为创建线程代价很高，线程池可以有效地利用有限的线程来启动任务。
 
 
+## 交替打印abc10次
 
+
+
+‘’‘
+public class Demo  {
+
+    static ReentrantLock lock = new ReentrantLock();
+    static Condition condition1 = lock.newCondition();
+    static Condition condition2 = lock.newCondition();
+    static Condition condition3 = lock.newCondition();
+    private static int num = 1;
+
+
+    static CountDownLatch countDownLatch = new CountDownLatch(10);
+    public static void main(String[] args) throws InterruptedException {
+
+        long loop = countDownLatch.getCount();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for(int i = 0; i < loop; ++i){
+                    try {
+                        printA();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for(int i = 0; i < loop; ++i){
+                    try {
+                        printB();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for(int i = 0; i < loop; ++i){
+                    try {
+                        printC();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
+
+        countDownLatch.await();
+
+        System.out.println("打印完毕.........");
+
+    }
+
+    public static void printA() throws InterruptedException {
+
+        lock.lock();
+        while(num != 1){
+            condition1.await();
+        }
+        System.out.println('A');
+        num = 2;
+        condition2.signal();
+        lock.unlock();
+
+    }
+
+    public static void printB() throws InterruptedException {
+
+        lock.lock();
+        while(num != 2){
+            condition2.await();
+        }
+        System.out.println('B');
+        num = 3;
+        condition3.signal();
+        lock.unlock();
+
+    }
+
+    public static void printC() throws InterruptedException {
+
+        lock.lock();
+        while(num != 3){
+            condition3.await();
+        }
+        System.out.println('C');
+        num = 1;
+        condition1.signal();
+        countDownLatch.countDown();
+        lock.unlock();
+
+    }
+
+
+}
+
+‘’‘
+
+## 生产者消费者模型
+
+'''
+public class ProduceConsumer  {
+
+
+
+    static ReentrantLock lock = new ReentrantLock();
+    static Condition produce = lock.newCondition();
+    static Condition consume = lock.newCondition();
+    static int size = 10;
+    static int count = 0;
+
+    public static void main(String[] args) {
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for(int i = 0; i < 10; ++i) {
+                        Thread.sleep(300);
+                        enqueue();
+                    }
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for(int i = 0; i < 10; ++i) {
+                        Thread.sleep(300);
+                        enqueue();
+                    }
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for(int i = 0; i < 10; ++i) {
+                        Thread.sleep(500);
+                        dequeue();
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    public static void enqueue() throws InterruptedException {
+
+        lock.lock();
+        while(count == size){
+            produce.await();
+        }
+        count++;
+        System.out.println(Thread.currentThread() + "目前一共有" + count + "包子");
+        consume.signal();
+        lock.unlock();
+    }
+
+    public static void dequeue() throws InterruptedException {
+
+        lock.lock();
+        while(count == 0){
+            consume.await();
+        }
+        count--;
+        System.out.println(Thread.currentThread() +"目前一共有" + count + "包子");
+        produce.signal();
+        lock.unlock();
+    }
+
+}
+
+'''
