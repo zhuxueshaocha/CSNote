@@ -87,7 +87,56 @@ redo log 实际上记录数据页的变更，而这种变更记录是没必要�
 
 #### redo log与bin log区别
 
-由 binlog 和 redo log 的区别可知：binlog 日志只用于归档，只依靠 binlog 是没有 crash-safe 能力的。但只有 redo log 也不行，因为 redo log 是 InnoDB特有的，且日志上的记录落盘后会被覆盖掉。因此需要 binlog和 redo log二者同时记录，才能保证当数据库发生宕机重启时，数据不会丢失。
+redo log（重做日志）
+InnoDB 通过 redo log 实现 crash-safe 能力，即使数据库发生异常重启，已提交的事务都不会丢失。
+
+执行写操作语句时，先把变更内容记录到 redo log 中，并更新内存，语句就执行完成了。
+在系统比较空闲的时候，或者 redo log 快写满的时候，再将变更内容应用到磁盘数据页上。
+内部实现
+
+redo log 是固定大小的，从头开始写，写到末尾就又回到开头循环写。一般配置为一组 4 个文件，每个 1GB，文件名是ib_logfile+ 数字。
+write pos 是当前记录的位置，一边写一边后移，写到第 3 号文件末尾后就回到 0 号文件开头。
+checkpoint 是当前要擦除的位置，也是往后推移并且循环的，擦除记录前要把记录更新到数据文件。
+write pos 和 checkpoint 之间的是剩余可用空间，用来记录新的操作。
+如果 write pos 追上 checkpoint，表示 redo log 已经满了，这时候不能再执行新的写操作，得停下来先擦掉一些记录（应用到磁盘数据页上），把 checkpoint 推进一下。
+redo log 的写入机制
+
+事务在执行过程中，生成的 redo log 是要先写到 redo log buffer 的。当事务中有多个写操作时，每执行一条语句，就改一次内存数据页，写一次 redo log buffer ，因为此时事务尚未提交 ，不能直接写到 redo log 文件里。最后提交事务时，才真正把日志写到 redo log 文件。
+由于 redo log 记录的是数据页的变化，因此线程可以共享 redo log buffer。
+redo log buffer 里面的内容，可能会在事务还没提交时就先搭便车持久化了，但不是必然每次生成后都直接持久化。
+redo log buffer 即使搭便车持久化了，也没有 prepare/ commit 状态的概念，只有该事务提交时写入 redo log 文件时才有状态的概念。
+日志写到 redo log buffer 是很快的，wirte 到 page cache 也差不多，但是 fsync 持久化到磁盘的速度就慢多了。
+write 和 fsync 的时机由参数 innodb_flush_log_at_trx_commit 控制
+
+innodb_flush_log_at_trx_commit=0 ：每次事务提交时都只是把 redo log 留在 redo log buffer 中，由后台线程自动持久化。
+innodb_flush_log_at_trx_commit=1 ：每次事务提交时都将 redo log 直接持久化到磁盘，真正实现 crash-safe，最安全。
+innodb_flush_log_at_trx_commit=2 ：每次事务提交时都只是把 redo log 写入 page cache，而不 fsync 落盘。
+后台线程自动持久化 redo log buffer 的场景
+
+后台线程每秒一次的轮询操作：把 redo log buffer 中的日志，调用 write 写到文件系统的 page cache，然后调用 fsync 持久化到磁盘。
+redo log buffer 占用的空间即将达到innodb_log_buffer_size 一半的时候，后台线程会主动写盘。
+并行的事务提交的时候，顺带将这个事务的 redo log buffer 搭便车持久化到磁盘。
+binlog（归档日志）
+应用场景
+
+主从复制
+误删恢复：让数据库恢复到半个月内任意一秒的状态（定期做整库备份 + 保存最近半个月的所有 binlog）
+找到最近的一次全量备份，用这个备份恢复出来一个临时库。
+从备份的时间点开始，把 binlog 依次重放到误删表之前的那个时刻。
+把表数据从临时库取出来，按需要恢复到线上库去。
+binlog 的写入机制
+
+事务执行过程中，先把日志写到 binlog cache，事务提交的时候，再把 binlog cache 写到 binlog 文件中，并清空 binlog cache。
+一个事务的 binlog 不能被拆开，不论这个事务多大，也要确保一次性写入，否则在备库执行时就会被当做多个事务分段自行，破坏了原子性。而一个线程只能同时有一个事务在执行，因此系统给每个线程的 binlog cache 分配了一片内存 ，但是所有线程共用同一份 binlog 文件。
+参数binlog_cache_size 用于控制单个线程内 binlog cache 所占内存的大小，超出则需暂存到磁盘。
+一个事务的 binlog 日志不会被拆到两个 binlog 文件，即使当前文件写入这条 binlog 之后会超过设置的max_binlog_size值，也会等到这个事务的日志写完再rotate，所以会出现超过配置大小上限的binlog 文件。
+write 和 fsync 的时机由参数 sync_binlog 控制
+
+sync_binlog=0：每次提交事务都只 write 就返回，由操作系统决定何时落盘，风险最大。
+sync_binlog=1：每次提交事务都会执行 fsync，从而保证 binlog 不会丢失事务，最安全。
+sync_binlog=N(100～1000) ：每次提交事务都只 write 就返回，但累积 N 个（组提交）事务时后台会一起 fsync。在出现 IO 瓶颈的场景里，可以提升性能。风险是，如果主机发生异常重启，会丢失最近 N 个事务的 binlog 日志。
+
+
 
 
 
