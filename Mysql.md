@@ -110,7 +110,7 @@ write 和 fsync 的时机由参数 innodb_flush_log_at_trx_commit 控制
 
 innodb_flush_log_at_trx_commit=0 ：每次事务提交时都只是把 redo log 留在 redo log buffer 中，由后台线程自动持久化。
 innodb_flush_log_at_trx_commit=1 ：每次事务提交时都将 redo log 直接持久化到磁盘，真正实现 crash-safe，最安全。
-innodb_flush_log_at_trx_commit=2 ：每次事务提交时都只是把 redo log 写入 page cache，而不 fsync 落盘。
+innodb_flush_log_at_trx_commit=2 ：每次事务提交时都只是把 redo log 写入 page cache（文件系统缓存，本质为内存），而不 fsync 落盘。
 后台线程自动持久化 redo log buffer 的场景
 
 后台线程每秒一次的轮询操作：把 redo log buffer 中的日志，调用 write 写到文件系统的 page cache，然后调用 fsync 持久化到磁盘。
