@@ -401,6 +401,26 @@ Redis 通过一个叫做过期字典（可以看作是 hash 表）来保存数�
 
 <img width="610" alt="截屏2022-01-25 下午4 58 22" src="https://user-images.githubusercontent.com/98211272/150944970-eb01fc38-0d67-4784-8bb6-ce4539b4b4d4.png">
 
+## 近似lru
+
+Redis 近似LRU 淘汰策略逻辑：
+
+首次淘汰：随机抽样选出【最多N个数据】放入【待淘汰数据池 evictionPoolEntry】；
+
+数据量N：由 redis.conf 配置的 maxmemory-samples 决定，默认值是5，配置为10将非常接近真实LRU效果，但是更消耗CPU；
+samples：n.样本；v.抽样；
+
+
+再次淘汰：随机抽样选出【最多N个数据】，只要数据比【待淘汰数据池 evictionPoolEntry】中的【任意一条】数据的 lru 小，则将该数据填充至 【待淘汰数据池】；
+
+evictionPoolEntry 的容容量是 EVPOOL_SIZE = 16；
+详见 源码 中 evictionPoolPopulate 方法的注释；
+
+
+执行淘汰： 挑选【待淘汰数据池】中 lru 最小的一条数据进行淘汰；
+
+
+
 # 缓存穿透
 
 缓存穿透说简单点就是大量请求的 key不在数据库和缓存中，根本没有经过缓存这一层。举个例子：某个黑客故意制造我们缓存中不存在的 key 发起大量请求，导致大量请求落到数据库。
@@ -467,7 +487,7 @@ Redis 通过一个叫做过期字典（可以看作是 hash 表）来保存数�
 
 
 
-## Redis集群
+## Redis集群（待补充，目前在飞书文档）
 
 ### 主从复制
 ### 哨兵
